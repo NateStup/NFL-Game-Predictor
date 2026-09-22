@@ -1,10 +1,19 @@
 """Sequential Elo ratings (pure functions, no I/O)."""
 
+import math
+
 import pandas as pd
 
 
 def derive_home_field_advantage(home_win_rate: float) -> float:
-    raise NotImplementedError
+    """Elo points of home advantage implied by a historical home win rate.
+
+    Inverts the Elo win-probability curve: the rating edge that makes two
+    otherwise equal teams produce `home_win_rate` for the home side.
+    """
+    if not 0 < home_win_rate < 1:
+        raise ValueError(f"home_win_rate must be in (0, 1), got {home_win_rate}")
+    return -400 * math.log10((1 / home_win_rate) - 1)
 
 
 def expected_home_win_prob(
