@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "nfl-predictor"
+version = "0.1.0"
+description = "Predicts NFL game outcomes, served as a FastAPI service."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pandas",
+    "scikit-learn",
+    "fastapi",
+    "uvicorn",
+    "nfl_data_py",
+    "joblib",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/nfl_predictor"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--cov=nfl_predictor --cov-report=term-missing"
