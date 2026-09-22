@@ -29,3 +29,8 @@ def chronological_split(
 def home_baseline_accuracy(test_df: pd.DataFrame) -> float:
     """Accuracy of always predicting the home team: fraction of home wins."""
     return float((test_df["home_score"] > test_df["away_score"]).mean())
+
+
+def regular_season_only(df: pd.DataFrame) -> pd.DataFrame:
+    """Return only regular-season games (game_type == "REG"), dropping playoffs."""
+    return df[df["game_type"] == "REG"]

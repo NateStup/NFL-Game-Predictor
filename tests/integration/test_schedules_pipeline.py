@@ -1,4 +1,4 @@
-"""Integration test: real nfl_data_py fetch -> drop_ties -> chronological_split.
+"""Integration test: real fetch -> regular_season_only -> drop_ties -> split.
 
 Hits the network. Deselect with: pytest -m "not integration"
 """
@@ -6,7 +6,11 @@ Hits the network. Deselect with: pytest -m "not integration"
 import pytest
 
 from nfl_predictor.data.fetch import fetch_schedules
-from nfl_predictor.data.transforms import chronological_split, drop_ties
+from nfl_predictor.data.transforms import (
+    chronological_split,
+    drop_ties,
+    regular_season_only,
+)
 
 pytestmark = pytest.mark.integration
 
@@ -32,7 +36,9 @@ def schedules():
 @pytest.fixture(scope="module")
 def split(schedules):
     return chronological_split(
-        drop_ties(schedules), train_seasons=TRAIN_SEASONS, test_seasons=TEST_SEASONS
+        drop_ties(regular_season_only(schedules)),
+        train_seasons=TRAIN_SEASONS,
+        test_seasons=TEST_SEASONS,
     )
 
 
@@ -47,12 +53,18 @@ def test_no_nulls_in_key_columns_after_tie_drop(schedules):
 
 
 def test_split_row_counts_in_sane_range(split):
-    # Schedules include playoffs (~11-13 games/season) as well as the regular
-    # season (256 games/season through 2020, 272 from 2021).
+    # Regular season: 256 games/season through 2020, 272 from 2021.
     train, test = split
 
-    assert 2400 <= len(train) <= 2500
-    assert 275 <= len(test) <= 295
+    assert 2200 <= len(train) <= 2400
+    assert 260 <= len(test) <= 280
+
+
+def test_no_playoff_games_remain(split):
+    train, test = split
+
+    assert set(train["game_type"]) == {"REG"}
+    assert set(test["game_type"]) == {"REG"}
 
 
 def test_no_season_overlap_on_real_data(split):

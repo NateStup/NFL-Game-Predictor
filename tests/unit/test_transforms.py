@@ -7,6 +7,7 @@ from nfl_predictor.data.transforms import (
     chronological_split,
     drop_ties,
     home_baseline_accuracy,
+    regular_season_only,
 )
 
 
@@ -100,3 +101,29 @@ def test_home_baseline_accuracy_no_home_wins():
     df = pd.DataFrame({"home_score": [3, 28], "away_score": [21, 30]})
 
     assert home_baseline_accuracy(df) == pytest.approx(0.0)
+
+
+# --- regular_season_only -----------------------------------------------------
+
+
+def test_regular_season_only_keeps_only_reg_games():
+    df = pd.DataFrame(
+        {
+            "game_id": ["g1", "g2", "g3", "g4", "g5", "g6", "g7"],
+            "game_type": ["REG", "WC", "REG", "DIV", "CON", "REG", "SB"],
+        }
+    )
+
+    result = regular_season_only(df)
+
+    assert list(result["game_id"]) == ["g1", "g3", "g6"]
+    assert (result["game_type"] == "REG").all()
+
+
+def test_regular_season_only_does_not_mutate_input():
+    df = pd.DataFrame({"game_type": ["REG", "WC"]})
+    before = df.copy()
+
+    regular_season_only(df)
+
+    pd.testing.assert_frame_equal(df, before)
