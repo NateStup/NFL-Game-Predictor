@@ -34,3 +34,7 @@ def home_baseline_accuracy(test_df: pd.DataFrame) -> float:
 def regular_season_only(df: pd.DataFrame) -> pd.DataFrame:
     """Return only regular-season games (game_type == "REG"), dropping playoffs."""
     return df[df["game_type"] == "REG"]
+
+
+def normalize_franchises(df):
+    raise NotImplementedError

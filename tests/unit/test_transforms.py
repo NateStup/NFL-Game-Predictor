@@ -7,6 +7,7 @@ from nfl_predictor.data.transforms import (
     chronological_split,
     drop_ties,
     home_baseline_accuracy,
+    normalize_franchises,
     regular_season_only,
 )
 
@@ -127,3 +128,53 @@ def test_regular_season_only_does_not_mutate_input():
     regular_season_only(df)
 
     pd.testing.assert_frame_equal(df, before)
+
+
+# --- normalize_franchises ----------------------------------------------------
+
+
+@pytest.fixture
+def relocation_games():
+    return pd.DataFrame(
+        {
+            "season": [2015, 2015, 2016, 2019, 2020, 2021],
+            "home_team": ["STL", "SEA", "SD", "OAK", "LV", "KC"],
+            "away_team": ["SF", "STL", "KC", "SD", "LAC", "LA"],
+            "home_score": [24, 17, 20, 13, 31, 10],
+        }
+    )
+
+
+def test_normalize_franchises_maps_old_abbreviations_on_both_sides(relocation_games):
+    result = normalize_franchises(relocation_games)
+
+    assert list(result["home_team"]) == ["LA", "SEA", "LAC", "LV", "LV", "KC"]
+    assert list(result["away_team"]) == ["SF", "LA", "KC", "LAC", "LAC", "LA"]
+
+
+def test_normalize_franchises_leaves_no_old_abbreviations(relocation_games):
+    result = normalize_franchises(relocation_games)
+
+    teams = set(result["home_team"]) | set(result["away_team"])
+    assert teams.isdisjoint({"STL", "SD", "OAK"})
+
+
+def test_normalize_franchises_passes_other_columns_and_teams_through():
+    current = pd.DataFrame(
+        {
+            "season": [2022, 2023],
+            "home_team": ["LA", "KC"],
+            "away_team": ["LV", "LAC"],
+            "home_score": [20, 27],
+        }
+    )
+
+    pd.testing.assert_frame_equal(normalize_franchises(current), current)
+
+
+def test_normalize_franchises_does_not_mutate_input(relocation_games):
+    before = relocation_games.copy()
+
+    normalize_franchises(relocation_games)
+
+    pd.testing.assert_frame_equal(relocation_games, before)
