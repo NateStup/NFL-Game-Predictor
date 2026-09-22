@@ -9,6 +9,7 @@ from nfl_predictor.data.fetch import fetch_schedules
 from nfl_predictor.data.transforms import (
     chronological_split,
     drop_ties,
+    normalize_franchises,
     regular_season_only,
 )
 
@@ -26,6 +27,13 @@ EXPECTED_COLUMNS = {
     "home_score",
     "away_score",
 }
+
+CURRENT_TEAMS = [
+    "ARI", "ATL", "BAL", "BUF", "CAR", "CHI", "CIN", "CLE",
+    "DAL", "DEN", "DET", "GB", "HOU", "IND", "JAX", "KC",
+    "LA", "LAC", "LV", "MIA", "MIN", "NE", "NO", "NYG",
+    "NYJ", "PHI", "PIT", "SEA", "SF", "TB", "TEN", "WAS",
+]  # fmt: skip
 
 
 @pytest.fixture(scope="module")
@@ -73,3 +81,10 @@ def test_no_season_overlap_on_real_data(split):
     assert set(train["season"]) == set(TRAIN_SEASONS)
     assert set(test["season"]) == set(TEST_SEASONS)
     assert set(train["season"]).isdisjoint(set(test["season"]))
+
+
+def test_processed_data_has_exactly_the_32_current_franchises(schedules):
+    processed = drop_ties(regular_season_only(normalize_franchises(schedules)))
+
+    teams = sorted(set(processed["home_team"]) | set(processed["away_team"]))
+    assert teams == CURRENT_TEAMS
