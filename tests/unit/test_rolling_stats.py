@@ -218,3 +218,10 @@ def test_output_aligned_to_input_index_and_order(games_df):
     assert list(win.index) == list(shuffled.index)
     assert pts.loc[112] == pytest.approx(G12_POINT_DIFF)
     assert win.loc[113] == pytest.approx(G13_WIN_PCT_DIFF)
+
+
+def test_duplicate_index_raises(games_df):
+    duplicated = games_df.set_axis([0] * len(games_df))
+
+    with pytest.raises(ValueError, match="unique"):
+        rolling_point_diff(duplicated)
