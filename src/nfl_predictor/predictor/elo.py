@@ -19,7 +19,9 @@ def derive_home_field_advantage(home_win_rate: float) -> float:
 def expected_home_win_prob(
     home_rating: float, away_rating: float, home_field_advantage: float
 ) -> float:
-    raise NotImplementedError
+    """Probability the home team wins, with HFA added to the home rating."""
+    edge = (home_rating + home_field_advantage) - away_rating
+    return 1 / (1 + 10 ** (-edge / 400))
 
 
 def update_ratings(
@@ -29,7 +31,13 @@ def update_ratings(
     home_field_advantage: float,
     k_factor: float,
 ) -> tuple[float, float]:
-    raise NotImplementedError
+    """Apply one game's result; returns (new_home_rating, new_away_rating).
+
+    Zero-sum: the away team loses exactly what the home team gains.
+    """
+    expected = expected_home_win_prob(home_rating, away_rating, home_field_advantage)
+    delta = k_factor * (float(home_won) - expected)
+    return home_rating + delta, away_rating - delta
 
 
 def compute_elo_ratings(
@@ -38,4 +46,43 @@ def compute_elo_ratings(
     k_factor: float,
     home_field_advantage: float,
 ) -> pd.Series:
-    raise NotImplementedError
+    """Pre-game Elo differential (home rating - away rating) for every game.
+
+    Walks games in date order with one continuous rating per team across all
+    seasons in the input (no reset at week 1); unseen teams start at
+    initial_rating. Each game's differential uses ratings from BEFORE that
+    game, then the result updates both teams. HFA drives the win probability
+    inside updates only; it is not added to the returned differential.
+
+    Games on the same date keep their input order (stable sort); a team plays
+    at most once per date, so that order cannot change any rating.
+    """
+    if not games_df.index.is_unique:
+        raise ValueError("games_df index must be unique to align features")
+    if games_df["gameday"].isna().any():
+        raise ValueError("gameday contains nulls; cannot order games")
+
+    order = pd.to_datetime(games_df["gameday"]).sort_values(kind="mergesort").index
+    ordered = games_df.loc[order]
+
+    ratings: dict[str, float] = {}
+    diffs = {}
+    for idx, home, away, home_score, away_score in zip(
+        ordered.index,
+        ordered["home_team"],
+        ordered["away_team"],
+        ordered["home_score"],
+        ordered["away_score"],
+    ):
+        home_rating = ratings.get(home, initial_rating)
+        away_rating = ratings.get(away, initial_rating)
+        diffs[idx] = home_rating - away_rating
+        ratings[home], ratings[away] = update_ratings(
+            home_rating,
+            away_rating,
+            home_score > away_score,
+            home_field_advantage,
+            k_factor,
+        )
+
+    return pd.Series(diffs, name="elo_diff", dtype=float).reindex(games_df.index)
