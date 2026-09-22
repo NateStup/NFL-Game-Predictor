@@ -29,3 +29,6 @@ packages = ["src/nfl_predictor"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--cov=nfl_predictor --cov-report=term-missing"
+markers = [
+    "integration: hits the network via nfl_data_py (deselect with -m \"not integration\")",
+]
