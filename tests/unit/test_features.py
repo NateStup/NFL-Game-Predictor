@@ -106,7 +106,7 @@ def test_home_win_target_matches_known_results(games_df):
     assert table.loc["g4", "home_win"] == 0
     assert table.loc["g13", "home_win"] == 0
     assert set(table["home_win"]) == {0, 1}
-    assert pd.api.types.is_integer_dtype(table["home_win"])
+    assert table["home_win"].dtype == "int64"
 
 
 # --- (d) no rows dropped -----------------------------------------------------
