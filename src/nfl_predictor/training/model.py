@@ -55,3 +55,7 @@ def evaluate_pipeline(
         "f1": float(f1_score(y_test, y_pred, zero_division=0)),
         "confusion_matrix": confusion_matrix(y_test, y_pred, labels=[0, 1]).tolist(),
     }
+
+
+def build_random_forest(random_state: int = 42):
+    raise NotImplementedError

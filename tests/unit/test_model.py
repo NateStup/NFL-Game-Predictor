@@ -3,6 +3,7 @@
 import numpy as np
 import pandas as pd
 import pytest
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.exceptions import NotFittedError
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
@@ -10,6 +11,7 @@ from sklearn.preprocessing import StandardScaler
 
 from nfl_predictor.training.model import (
     build_pipeline,
+    build_random_forest,
     evaluate_pipeline,
     train_pipeline,
 )
@@ -182,3 +184,33 @@ def test_evaluate_confusion_matrix_is_2x2_even_if_one_class_absent(fitted):
     result = evaluate_pipeline(fitted, X, y)
 
     assert result["confusion_matrix"] == [[0, 0], [0, 2]]
+
+
+# --- build_random_forest -----------------------------------------------------
+
+
+def test_build_random_forest_is_a_random_forest_not_a_pipeline():
+    model = build_random_forest()
+
+    assert isinstance(model, RandomForestClassifier)
+    # No scaler: trees split on raw thresholds, so there is no Pipeline wrapper.
+    assert not isinstance(model, Pipeline)
+
+
+def test_build_random_forest_uses_100_trees_and_random_state():
+    assert build_random_forest().n_estimators == 100
+    assert build_random_forest().random_state == 42
+    assert build_random_forest(random_state=7).random_state == 7
+
+
+def test_build_random_forest_leaves_all_other_params_at_defaults():
+    # Deliberately unconstrained (max_depth=None, min_samples_leaf=1, ...) so
+    # any overfitting is visible before choosing constraints.
+    expected = RandomForestClassifier(n_estimators=100, random_state=42).get_params()
+
+    assert build_random_forest().get_params() == expected
+
+
+def test_build_random_forest_is_unfitted(X_train):
+    with pytest.raises(NotFittedError):
+        build_random_forest().predict(X_train)
