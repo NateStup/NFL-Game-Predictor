@@ -2,6 +2,9 @@
 
 import pandas as pd
 
+# Relocated franchises: historical abbreviation -> current abbreviation.
+FRANCHISE_RENAMES = {"STL": "LA", "SD": "LAC", "OAK": "LV"}
+
 
 def drop_ties(df: pd.DataFrame) -> pd.DataFrame:
     """Return only games with a winner (home_score != away_score)."""
@@ -34,3 +37,11 @@ def home_baseline_accuracy(test_df: pd.DataFrame) -> float:
 def regular_season_only(df: pd.DataFrame) -> pd.DataFrame:
     """Return only regular-season games (game_type == "REG"), dropping playoffs."""
     return df[df["game_type"] == "REG"]
+
+
+def normalize_franchises(df: pd.DataFrame) -> pd.DataFrame:
+    """Map relocated franchises to their current abbreviation on both sides,
+    so each franchise has one continuous history."""
+    return df.replace(
+        {"home_team": FRANCHISE_RENAMES, "away_team": FRANCHISE_RENAMES}
+    )
