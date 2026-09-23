@@ -142,11 +142,33 @@ uses.
 
 The 2024 figure comes from one season of 272 games. Some seasons are more
 predictable than others, so one season's accuracy can be higher or lower than
-the model's typical accuracy. Walk-forward validation gives a steadier
-estimate: train on seasons up to year N, test on year N+1, repeat, and average.
-**That validation isn't implemented in this repository yet**, so no
-walk-forward number is reported here. Read 0.6875 as the result for 2024, not
-as the expected accuracy in any given season.
+the model's typical accuracy. `scripts/walk_forward_validation.py` gives a
+steadier estimate. For each season from 2019 to 2023, it trains a fresh model
+on every earlier season and tests on that season. It uses only 2015-2023 data
+and never loads 2024. Each fold also derives its own Elo home-field advantage
+from its own training seasons.
+
+| Train     | Test | Games | Home baseline | Accuracy | vs baseline |
+|-----------|------|-------|---------------|----------|-------------|
+| 2015-2018 | 2019 | 255   | 0.5176        | 0.6353   | +0.1176     |
+| 2015-2019 | 2020 | 255   | 0.4980        | 0.6431   | +0.1451     |
+| 2015-2020 | 2021 | 271   | 0.5166        | 0.6310   | +0.1144     |
+| 2015-2021 | 2022 | 269   | 0.5613        | 0.6394   | +0.0781     |
+| 2015-2022 | 2023 | 272   | 0.5551        | 0.6176   | +0.0625     |
+
+Across the 5 folds (± is the sample standard deviation):
+
+- Accuracy: **0.6333 ± 0.0099**
+- Home baseline: 0.5298 ± 0.0272
+- Mean margin over baseline: **+0.1035**
+- **The model beats its own season's baseline in 5 of 5 folds.**
+
+The 2024 test accuracy of 0.6875 is 4.4 to 7.0 points above every walk-forward
+fold, and 5.4 points above the walk-forward mean. The 2024 home baseline
+(0.5331) is in line with the other seasons, so 2024 was most likely an
+easier-than-usual season to predict from recent form and Elo. For how well the
+model should do in a typical season, use the walk-forward mean of about 63%,
+not 69%.
 
 ## API usage
 
