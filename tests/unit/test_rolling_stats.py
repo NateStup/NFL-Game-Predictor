@@ -33,6 +33,7 @@ import pytest
 from nfl_predictor.predictor.rolling_stats import (
     _rolling_team_stat,
     _to_team_games,
+    latest_team_rolling_stats,
     rolling_point_diff,
     rolling_win_pct_diff,
 )
@@ -225,3 +226,113 @@ def test_duplicate_index_raises(games_df):
 
     with pytest.raises(ValueError, match="unique"):
         rolling_point_diff(duplicated)
+
+
+# =============================================================================
+# Current-state snapshot: last `window` games PLAYED, unshifted (the most
+# recent game IS included). Used for future matchups, not training rows.
+# =============================================================================
+
+# One extra game after g14 so the unshifted and shifted windows differ in
+# both win% and point diff (in GAMES alone, each team's dropped game and
+# newest game happen to share a result, so win% would coincide).
+#   g15  2024-10-20  A - B  24-14   A W +10   B L -10
+G15 = ("2024-10-20", 2024, "A", "B", 24, 14)
+
+# A's games: g0 g1 g3 g4 g6 g7 g9 g10 g12 g13 g15 (11 games).
+# Snapshot = last 8 PLAYED = g4, g6, g7, g9, g10, g12, g13, g15
+#   outcomes: L W W L W W W W                       -> 6 / 8 = 0.75
+#   diffs:    -3 +7 +7 -3 +28 +11 +28 +10 = 85      -> 85 / 8 = 10.625
+# The shifted (training) value on A's last row, g15, excludes g15 itself:
+#   g3, g4, g6, g7, g9, g10, g12, g13
+#   outcomes: L L W W L W W W                       -> 5 / 8 = 0.625
+#   diffs:    -14 -3 +7 +7 -3 +28 +11 +28 = 61      -> 61 / 8 = 7.625
+A_SNAPSHOT = (0.75, 10.625)
+A_SHIFTED_LAST_ROW = (0.625, 7.625)
+
+# B's snapshot = g5, g6, g8, g9, g11, g12, g14, g15
+#   outcomes: L L W W L L W L                       -> 3 / 8 = 0.375
+#   diffs:    -20 -7 +14 +3 -3 -11 +3 -10 = -31     -> -31 / 8 = -3.875
+B_SNAPSHOT = (0.375, -3.875)
+
+# C (not in g15) snapshot = g4, g5, g7, g8, g10, g11, g13, g14
+#   outcomes: W W L L L W L L                       -> 3 / 8 = 0.375
+#   diffs:    +3 +20 -7 -14 -28 +3 -28 -3 = -54     -> -54 / 8 = -6.75
+C_SNAPSHOT = (0.375, -6.75)
+
+
+@pytest.fixture
+def games_with_g15(games_df):
+    extra = pd.DataFrame([G15], columns=games_df.columns)
+    return pd.concat([games_df, extra], ignore_index=True)
+
+
+def test_snapshot_one_row_per_team_with_expected_columns(games_with_g15):
+    snap = latest_team_rolling_stats(games_with_g15)
+
+    assert list(snap.columns) == ["team", "rolling_win_pct", "rolling_point_diff"]
+    assert list(snap["team"]) == ["A", "B", "C"]
+
+
+def test_snapshot_matches_hand_calculated_last_8_games(games_with_g15):
+    snap = latest_team_rolling_stats(games_with_g15).set_index("team")
+
+    for team, (win_pct, point_diff) in [
+        ("A", A_SNAPSHOT),
+        ("B", B_SNAPSHOT),
+        ("C", C_SNAPSHOT),
+    ]:
+        assert snap.loc[team, "rolling_win_pct"] == pytest.approx(win_pct)
+        assert snap.loc[team, "rolling_point_diff"] == pytest.approx(point_diff)
+
+
+def test_snapshot_includes_most_recent_game_unlike_shifted_feature(games_with_g15):
+    snap = latest_team_rolling_stats(games_with_g15).set_index("team")
+    long_df = _to_team_games(games_with_g15)
+    is_a = long_df["team"] == "A"
+    shifted_win = _rolling_team_stat(long_df, "won")[is_a].iloc[-1]
+    shifted_pts = _rolling_team_stat(long_df, "point_diff")[is_a].iloc[-1]
+
+    # The training-time value is one game stale ...
+    assert (shifted_win, shifted_pts) == pytest.approx(A_SHIFTED_LAST_ROW)
+    # ... the snapshot is not.
+    assert snap.loc["A", "rolling_win_pct"] != pytest.approx(shifted_win)
+    assert snap.loc["A", "rolling_point_diff"] != pytest.approx(shifted_pts)
+
+
+def test_snapshot_equals_training_feature_for_the_next_game(games_with_g15):
+    # A future A-vs-C game: its training-time (shifted) feature is built from
+    # exactly the games already played, i.e. the snapshot. Its own score is a
+    # placeholder; the shifted feature never reads it.
+    future = pd.DataFrame(
+        [("2024-10-27", 2024, "A", "C", 0, 0)], columns=games_with_g15.columns
+    )
+    with_future = pd.concat([games_with_g15, future], ignore_index=True)
+    snap = latest_team_rolling_stats(games_with_g15).set_index("team")
+
+    expected_pts = snap.loc["A", "rolling_point_diff"] - snap.loc["C", "rolling_point_diff"]
+    expected_win = snap.loc["A", "rolling_win_pct"] - snap.loc["C", "rolling_win_pct"]
+    assert rolling_point_diff(with_future).iloc[-1] == pytest.approx(expected_pts)
+    assert rolling_win_pct_diff(with_future).iloc[-1] == pytest.approx(expected_win)
+
+
+def test_snapshot_is_nan_for_team_with_fewer_than_window_games():
+    # Two teams, 3 games each: short of an 8-game window, so NaN (same full-
+    # window rule as training). With window=3 the same data is complete.
+    df = pd.DataFrame(
+        [
+            ("2024-09-08", 2024, "A", "B", 20, 10),
+            ("2024-09-15", 2024, "B", "A", 17, 14),
+            ("2024-09-22", 2024, "A", "B", 30, 3),
+        ],
+        columns=["gameday", "season", "home_team", "away_team", "home_score", "away_score"],
+    )
+
+    short = latest_team_rolling_stats(df, window=8)
+    assert short[["rolling_win_pct", "rolling_point_diff"]].isna().all().all()
+    assert list(short["team"]) == ["A", "B"]  # teams are still listed
+
+    # A: W +10, L -3, W +27 -> win% 2/3, diff 34/3
+    full = latest_team_rolling_stats(df, window=3).set_index("team")
+    assert full.loc["A", "rolling_win_pct"] == pytest.approx(2 / 3)
+    assert full.loc["A", "rolling_point_diff"] == pytest.approx(34 / 3)

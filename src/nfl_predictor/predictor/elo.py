@@ -86,3 +86,7 @@ def compute_elo_ratings(
         )
 
     return pd.Series(diffs, name="elo_diff", dtype=float).reindex(games_df.index)
+
+
+def latest_team_elo_ratings(games_df, initial_rating, k_factor, home_field_advantage):
+    raise NotImplementedError

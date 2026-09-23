@@ -83,3 +83,7 @@ def rolling_point_diff(games_df: pd.DataFrame, window: int = 8) -> pd.Series:
     return _home_minus_away(games_df, "point_diff", window).rename(
         "rolling_point_diff"
     )
+
+
+def latest_team_rolling_stats(games_df, window=8):
+    raise NotImplementedError
