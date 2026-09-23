@@ -20,8 +20,9 @@ from nfl_predictor.training.model import (
 )
 
 EXPECTED_BASELINE = 0.5331  # 2024 regular-season home win rate, 4 dp
-LOGREG_TEST_ACCURACY = 0.6875  # from prior run, for reference
-ARTIFACT_PATH = Path(__file__).resolve().parents[1] / "models" / "random_forest.joblib"
+MODELS_DIR = Path(__file__).resolve().parents[1] / "models"
+ARTIFACT_PATH = MODELS_DIR / "random_forest.joblib"
+LOGREG_ARTIFACT_PATH = MODELS_DIR / "logistic_regression.joblib"
 
 
 def print_metrics(label: str, metrics: dict) -> None:
@@ -36,6 +37,12 @@ def print_metrics(label: str, metrics: dict) -> None:
 
 
 def main() -> None:
+    if not LOGREG_ARTIFACT_PATH.exists():
+        raise FileNotFoundError(
+            f"{LOGREG_ARTIFACT_PATH} not found; it is needed for the comparison. "
+            "Run scripts/train_logistic_regression.py first."
+        )
+
     # (a) same feature splits as the logistic regression run
     splits = build_feature_splits()
     X_train, y_train = splits.train[FEATURE_COLUMNS], splits.train[TARGET_COLUMN]
@@ -52,6 +59,10 @@ def main() -> None:
         raise RuntimeError(
             f"Test baseline changed: got {baseline:.6f}, expected {EXPECTED_BASELINE}"
         )
+    if abs(y_test.mean() - baseline) > 1e-12:
+        raise RuntimeError(
+            f"home_win target mean {y_test.mean():.6f} != baseline {baseline:.6f}"
+        )
     print(f"Test baseline (home team always wins): {baseline:.4f} [matches {EXPECTED_BASELINE}]")
 
     # (d) train AND test metrics: the overfitting diagnostic
@@ -60,15 +71,20 @@ def main() -> None:
     print_metrics("Train", train_metrics)
     print_metrics("Test", test_metrics)
 
+    # Logistic regression reference: saved artifact, scored on this X_test
+    logreg_accuracy = evaluate_pipeline(
+        joblib.load(LOGREG_ARTIFACT_PATH), X_test, y_test
+    )["accuracy"]
+
     # (e) comparison block
     print("Accuracy comparison (2024 test set unless noted):")
     print(f"  Baseline (always home):            {baseline:.4f}")
-    print(f"  Logistic regression test:          {LOGREG_TEST_ACCURACY:.4f}  (from prior run, for reference)")
+    print(f"  Logistic regression test:          {logreg_accuracy:.4f}  (saved artifact, scored live)")
     print(f"  Random forest train (2015-2023):   {train_metrics['accuracy']:.4f}")
     print(f"  Random forest test:                {test_metrics['accuracy']:.4f}")
     print(f"  RF train - test gap:               {train_metrics['accuracy'] - test_metrics['accuracy']:+.4f}")
     print(f"  RF test vs baseline:               {test_metrics['accuracy'] - baseline:+.4f}")
-    print(f"  RF test vs logistic regression:    {test_metrics['accuracy'] - LOGREG_TEST_ACCURACY:+.4f}")
+    print(f"  RF test vs logistic regression:    {test_metrics['accuracy'] - logreg_accuracy:+.4f}")
 
     # (f) feature importances
     print("Feature importances (mean decrease in impurity):")
