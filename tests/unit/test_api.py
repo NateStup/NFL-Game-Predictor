@@ -128,3 +128,47 @@ def test_artifacts_load_once_at_startup_into_app_state(client, load_calls):
 
     assert load_calls == [1]
     assert isinstance(client.app.state.artifacts, PredictionArtifacts)
+
+
+# --- GET / (landing) ---------------------------------------------------------
+
+
+def test_landing_returns_200_json(client):
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/json")
+    assert list(response.json()) == ["description", "snapshot_notice", "training", "docs", "predict"]
+
+
+def test_landing_states_the_frozen_2024_snapshot_near_the_top(client):
+    body = client.get("/").json()
+    notice = body["snapshot_notice"]
+
+    # Second field, straight after the one-line description.
+    assert list(body).index("snapshot_notice") == 1
+    assert "end of the 2024 regular season" in notice
+    assert "frozen snapshot" in notice
+    assert "not the current season" in notice
+
+
+def test_landing_describes_what_the_api_predicts(client):
+    description = client.get("/").json()["description"]
+
+    assert "NFL regular-season game" in description
+    assert "recent form" in description
+    assert "Elo rating" in description
+
+
+def test_landing_states_training_and_test_seasons(client):
+    training = client.get("/").json()["training"]
+
+    assert "2015-2023" in training
+    assert "tested on the 2024" in training
+
+
+def test_landing_points_to_docs_and_predict(client):
+    body = client.get("/").json()
+
+    assert body["docs"].startswith("/docs")
+    assert body["predict"].startswith("POST /predict")
