@@ -3,6 +3,16 @@
 from pydantic import BaseModel
 
 
+class LandingResponse(BaseModel):
+    """Orientation for someone arriving at the API root."""
+
+    description: str
+    snapshot_notice: str
+    training: str
+    docs: str
+    predict: str
+
+
 class PredictRequest(BaseModel):
     home_team: str
     away_team: str
