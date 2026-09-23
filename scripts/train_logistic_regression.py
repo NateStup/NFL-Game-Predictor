@@ -3,11 +3,17 @@
 Usage: python scripts/train_logistic_regression.py
 """
 
+import json
 from pathlib import Path
 
 import joblib
 
-from build_features import build_feature_splits  # sibling script in scripts/
+from build_features import (  # sibling script in scripts/
+    INITIAL_RATING,
+    K_FACTOR,
+    WINDOW,
+    build_feature_splits,
+)
 from nfl_predictor.data.transforms import home_baseline_accuracy
 from nfl_predictor.predictor.features import FEATURE_COLUMNS, TARGET_COLUMN
 from nfl_predictor.training.model import (
@@ -18,6 +24,7 @@ from nfl_predictor.training.model import (
 
 EXPECTED_BASELINE = 0.5331  # 2024 regular-season home win rate, 4 dp
 ARTIFACT_PATH = Path(__file__).resolve().parents[1] / "models" / "logistic_regression.joblib"
+CONFIG_PATH = ARTIFACT_PATH.parent / "training_config.json"
 
 
 def main() -> None:
@@ -72,6 +79,19 @@ def main() -> None:
     ARTIFACT_PATH.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(pipeline, ARTIFACT_PATH)
     print(f"Saved fitted pipeline to {ARTIFACT_PATH.relative_to(ARTIFACT_PATH.parents[1])}")
+
+    # Constants the saved pipeline was trained with, for request-time features
+    config = {
+        "home_field_advantage": splits.hfa,
+        "k_factor": K_FACTOR,
+        "initial_rating": INITIAL_RATING,
+        "window": WINDOW,
+        "test_baseline_accuracy": baseline,
+    }
+    CONFIG_PATH.write_text(json.dumps(config, indent=2) + "\n")
+    if json.loads(CONFIG_PATH.read_text()) != config:
+        raise RuntimeError(f"{CONFIG_PATH} did not round-trip to the written values")
+    print(f"Saved training config to {CONFIG_PATH.relative_to(CONFIG_PATH.parents[1])}: {config}")
 
 
 if __name__ == "__main__":
