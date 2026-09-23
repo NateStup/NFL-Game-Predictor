@@ -85,5 +85,26 @@ def rolling_point_diff(games_df: pd.DataFrame, window: int = 8) -> pd.Series:
     )
 
 
-def latest_team_rolling_stats(games_df, window=8):
-    raise NotImplementedError
+def latest_team_rolling_stats(games_df: pd.DataFrame, window: int = 8) -> pd.DataFrame:
+    """Each team's CURRENT form: means over its last `window` games played.
+
+    Unlike the training features, this is unshifted: the most recent game is
+    included, because it describes a team heading into a future game rather
+    than a game whose result exists. A team with fewer than `window` games
+    gets NaN, the same full-window rule the model was trained under.
+
+    Returns one row per team (sorted): team, rolling_win_pct,
+    rolling_point_diff.
+    """
+    long_df = _to_team_games(games_df)
+
+    def last_window_mean(s: pd.Series) -> float:
+        return s.iloc[-window:].mean() if len(s) >= window else float("nan")
+
+    by_team = long_df.groupby("team")
+    return pd.DataFrame(
+        {
+            "rolling_win_pct": by_team["won"].agg(last_window_mean),
+            "rolling_point_diff": by_team["point_diff"].agg(last_window_mean),
+        }
+    ).rename_axis("team").reset_index()
