@@ -8,6 +8,7 @@ Importable: build_feature_splits() returns the same tables without printing.
 """
 
 from dataclasses import dataclass
+from pathlib import Path
 
 import pandas as pd
 
@@ -29,9 +30,24 @@ K_FACTOR = 20.0
 INITIAL_RATING = 1500.0
 ROLLING_COLUMNS = ["rolling_win_pct_diff", "rolling_point_diff"]
 
+# Processed game history for request-time team state (gitignored).
+PROCESSED_GAMES_PATH = Path(__file__).resolve().parents[1] / "data" / "processed_games.parquet"
+PROCESSED_GAME_COLUMNS = [
+    "game_id",
+    "season",
+    "week",
+    "gameday",
+    "home_team",
+    "away_team",
+    "home_score",
+    "away_score",
+]
+PARQUET_ENGINE = "fastparquet"
+
 
 @dataclass(frozen=True)
 class FeatureSplits:
+    games: pd.DataFrame  # processed games, all seasons, date-sorted, pre-features
     train: pd.DataFrame  # feature table, warmup rows dropped
     test: pd.DataFrame  # feature table
     train_games: pd.DataFrame  # processed games (with scores), train seasons
@@ -85,6 +101,7 @@ def build_feature_splits() -> FeatureSplits:
             raise RuntimeError(f"{nulls} nulls remain in {name} after warmup drop")
 
     return FeatureSplits(
+        games=games,
         train=train,
         test=test,
         train_games=train_games,
@@ -97,8 +114,23 @@ def build_feature_splits() -> FeatureSplits:
     )
 
 
+def save_processed_games(games: pd.DataFrame, path: Path = PROCESSED_GAMES_PATH) -> pd.DataFrame:
+    """Write the processed game rows to parquet and verify an exact round-trip.
+
+    Returns the frame that was written (selected columns, fresh RangeIndex).
+    """
+    to_save = games[PROCESSED_GAME_COLUMNS].reset_index(drop=True)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    to_save.to_parquet(path, engine=PARQUET_ENGINE, index=False)
+
+    reloaded = pd.read_parquet(path, engine=PARQUET_ENGINE)
+    pd.testing.assert_frame_equal(reloaded, to_save, check_exact=True)
+    return to_save
+
+
 def main() -> None:
     s = build_feature_splits()
+    saved = save_processed_games(s.games)
     print(f"Games fetched:               {s.n_fetched}")
     print(f"Regular-season, tie-free:    {s.n_games}")
     print(f"Train home win rate:         {s.train_home_rate:.4f} (2015-2023)")
@@ -111,6 +143,10 @@ def main() -> None:
     print(f"Test rows:                   {len(s.test)}")
     print(f"Feature columns:             {FEATURE_COLUMNS}")
     print(f"Train shape / test shape:    {s.train.shape} / {s.test.shape}")
+    print(
+        f"Saved processed games:       {PROCESSED_GAMES_PATH.relative_to(PROCESSED_GAMES_PATH.parents[1])} "
+        f"{saved.shape}, round-trip identical"
+    )
 
 
 if __name__ == "__main__":
