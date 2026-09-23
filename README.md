@@ -286,6 +286,7 @@ python scripts/build_features.py             # writes data/processed_games.parqu
 python scripts/train_logistic_regression.py  # writes models/logistic_regression.joblib and models/training_config.json
 python scripts/train_random_forest.py        # comparison only; needs the logistic regression artifact
 uvicorn nfl_predictor.api.main:app           # serves on http://127.0.0.1:8000
+python scripts/walk_forward_validation.py    # optional, validation only; not needed before starting the API
 ```
 
 `scripts/compute_baseline.py` separately prints the game counts and the 2024
