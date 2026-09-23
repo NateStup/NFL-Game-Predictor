@@ -15,6 +15,7 @@ dependencies = [
     "uvicorn",
     "nfl_data_py",
     "joblib",
+    "fastparquet",
 ]
 
 [project.optional-dependencies]
