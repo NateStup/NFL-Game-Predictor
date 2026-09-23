@@ -1,6 +1,7 @@
 """Logistic-regression pipeline: build, train, evaluate."""
 
 import pandas as pd
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     accuracy_score,
@@ -55,3 +56,11 @@ def evaluate_pipeline(
         "f1": float(f1_score(y_test, y_pred, zero_division=0)),
         "confusion_matrix": confusion_matrix(y_test, y_pred, labels=[0, 1]).tolist(),
     }
+
+
+def build_random_forest(random_state: int = 42) -> RandomForestClassifier:
+    """Unfitted random forest: 100 trees, every other parameter at its default.
+
+    No scaler: tree splits are threshold comparisons, unaffected by scale.
+    """
+    return RandomForestClassifier(n_estimators=100, random_state=random_state)
