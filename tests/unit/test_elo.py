@@ -11,6 +11,7 @@ from nfl_predictor.predictor.elo import (
     compute_elo_ratings,
     derive_home_field_advantage,
     expected_home_win_prob,
+    latest_team_elo_ratings,
     update_ratings,
 )
 
@@ -269,3 +270,76 @@ def test_null_date_raises(games_df):
 def test_duplicate_index_raises(games_df):
     with pytest.raises(ValueError, match="unique"):
         elo(games_df.set_axis([0] * len(games_df)))
+
+
+# =============================================================================
+# Current-state snapshot: each team's rating AFTER its most recent game.
+# =============================================================================
+
+# Three games, HFA = 0 so every step is hand-computable. K = 20, start 1500.
+#
+# g0  A (home) beats B.  Equal ratings: P(home) = 0.5
+#     delta = 20 * (1 - 0.5) = 10          -> A 1510,  B 1490
+# g1  B (home) loses to C.  edge = 1490 - 1500 = -10
+#     P(home) = 1 / (1 + 10^(10/400)) = 1 / (1 + 10^0.025)
+#             = 1 / (1 + 1.059254) = 0.485613
+#     delta = 20 * (0 - 0.485613) = -9.712256
+#     -> B 1490 - 9.712256 = 1480.287744,  C 1500 + 9.712256 = 1509.712256
+# g2  A (home) beats C.  edge = 1510 - 1509.712256 = 0.287744
+#     P(home) = 1 / (1 + 10^(-0.287744/400)) = 0.500414
+#     delta = 20 * (1 - 0.500414) = 9.991718
+#     -> A 1510 + 9.991718 = 1519.991718,  C 1509.712256 - 9.991718 = 1499.720538
+# Final: A 1519.991718, B 1480.287744, C 1499.720538  (sum 4500: zero-sum)
+SNAPSHOT_GAMES = [
+    ("2024-09-08", 2024, "A", "B", 24, 17),
+    ("2024-09-15", 2024, "B", "C", 10, 20),
+    ("2024-09-22", 2024, "A", "C", 27, 13),
+]
+SNAPSHOT_FINAL = {"A": 1519.991718, "B": 1480.287744, "C": 1499.720538}
+
+
+@pytest.fixture
+def snapshot_games():
+    return pd.DataFrame(SNAPSHOT_GAMES, columns=COLUMNS)
+
+
+def latest(df, hfa=0.0):
+    return latest_team_elo_ratings(
+        df, initial_rating=INITIAL, k_factor=K, home_field_advantage=hfa
+    )
+
+
+def test_elo_snapshot_one_row_per_team_with_expected_columns(snapshot_games):
+    snap = latest(snapshot_games)
+
+    assert list(snap.columns) == ["team", "elo_rating"]
+    assert list(snap["team"]) == ["A", "B", "C"]
+
+
+def test_elo_snapshot_matches_hand_calculated_final_ratings(snapshot_games):
+    snap = latest(snapshot_games).set_index("team")["elo_rating"]
+
+    for team, rating in SNAPSHOT_FINAL.items():
+        assert snap[team] == pytest.approx(rating, abs=1e-6)
+    assert snap.sum() == pytest.approx(3 * INITIAL)
+
+
+def test_elo_snapshot_is_post_update_not_pre_game(snapshot_games):
+    # A's rating going INTO its last game (g2) was 1510; the snapshot must
+    # include g2's update.
+    snap = latest(snapshot_games).set_index("team")["elo_rating"]
+
+    assert snap["A"] != pytest.approx(1510.0)
+    assert snap["A"] == pytest.approx(1510.0 + 9.991718, abs=1e-6)
+
+
+def test_elo_snapshot_equals_pre_game_diff_of_the_next_game(games_df):
+    # A future A-vs-B game's training-time elo_diff is built from ratings after
+    # every played game, i.e. the snapshot. Its placeholder score is never
+    # read for its own differential.
+    future = pd.DataFrame([("2024-10-20", 2024, "A", "B", 0, 0)], columns=COLUMNS)
+    with_future = pd.concat([games_df, future], ignore_index=True)
+
+    snap = latest(games_df, hfa=HFA).set_index("team")["elo_rating"]
+
+    assert elo(with_future).iloc[-1] == pytest.approx(snap["A"] - snap["B"])

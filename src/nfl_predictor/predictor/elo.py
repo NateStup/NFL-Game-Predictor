@@ -40,22 +40,20 @@ def update_ratings(
     return home_rating + delta, away_rating - delta
 
 
-def compute_elo_ratings(
+def _run_elo(
     games_df: pd.DataFrame,
     initial_rating: float,
     k_factor: float,
     home_field_advantage: float,
-) -> pd.Series:
-    """Pre-game Elo differential (home rating - away rating) for every game.
+) -> tuple[dict, dict[str, float]]:
+    """Walk games in date order once.
 
-    Walks games in date order with one continuous rating per team across all
-    seasons in the input (no reset at week 1); unseen teams start at
-    initial_rating. Each game's differential uses ratings from BEFORE that
-    game, then the result updates both teams. HFA drives the win probability
-    inside updates only; it is not added to the returned differential.
-
-    Games on the same date keep their input order (stable sort); a team plays
-    at most once per date, so that order cannot change any rating.
+    Returns (pre-game home-minus-away diff keyed by games_df index label,
+    each team's rating after its final game). Ratings are one continuous
+    sequence per team across all seasons (no reset at week 1); unseen teams
+    start at initial_rating. Games on the same date keep their input order
+    (stable sort); a team plays at most once per date, so that order cannot
+    change any rating.
     """
     if not games_df.index.is_unique:
         raise ValueError("games_df index must be unique to align features")
@@ -84,5 +82,41 @@ def compute_elo_ratings(
             home_field_advantage,
             k_factor,
         )
+    return diffs, ratings
 
+
+def compute_elo_ratings(
+    games_df: pd.DataFrame,
+    initial_rating: float,
+    k_factor: float,
+    home_field_advantage: float,
+) -> pd.Series:
+    """Pre-game Elo differential (home rating - away rating) for every game.
+
+    Each game's differential uses ratings from BEFORE that game, then the
+    result updates both teams. HFA drives the win probability inside updates
+    only; it is not added to the returned differential.
+    """
+    diffs, _ = _run_elo(games_df, initial_rating, k_factor, home_field_advantage)
     return pd.Series(diffs, name="elo_diff", dtype=float).reindex(games_df.index)
+
+
+def latest_team_elo_ratings(
+    games_df: pd.DataFrame,
+    initial_rating: float,
+    k_factor: float,
+    home_field_advantage: float,
+) -> pd.DataFrame:
+    """Each team's CURRENT rating: after its most recent game's update.
+
+    Unlike compute_elo_ratings (pre-game, for training rows), this includes
+    every game in games_df, for rating a future matchup. Returns one row per
+    team (sorted): team, elo_rating.
+    """
+    _, ratings = _run_elo(games_df, initial_rating, k_factor, home_field_advantage)
+    return (
+        pd.Series(ratings, name="elo_rating", dtype=float)
+        .sort_index()
+        .rename_axis("team")
+        .reset_index()
+    )
