@@ -29,12 +29,18 @@ htmlcov/
 *.pkl
 *.pickle
 *.h5
-models/
+# models/* (not models/): git cannot re-include files inside an ignored directory
+models/*
 data/raw/
 data/interim/
 data/processed/
 *.csv
 *.parquet
+
+# Artifacts the deployed service reads at startup; everything else above stays ignored
+!data/processed_games.parquet
+!models/logistic_regression.joblib
+!models/training_config.json
 
 # Notebooks
 .ipynb_checkpoints/

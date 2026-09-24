@@ -1,0 +1,7 @@
+{
+  "home_field_advantage": 33.631742413466995,
+  "k_factor": 20.0,
+  "initial_rating": 1500.0,
+  "window": 8,
+  "test_baseline_accuracy": 0.5330882352941176
+}
