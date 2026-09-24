@@ -9,6 +9,14 @@ architecture (data → features → training → service → API), tests written
 before the code they cover, and honest validation. It isn't meant to show off
 predictive modeling.
 
+## Live demo
+
+The API is deployed at <https://nfl-game-predictor.onrender.com/docs>, the
+interactive Swagger UI where you can try `POST /predict` directly. It runs on
+Render's free tier, which shuts the service down after 15 minutes without
+traffic. The first request after an idle period can take up to about a minute
+while it starts back up. That's how the free tier works, not a bug.
+
 ## Data source
 
 All data comes from `nfl_data_py.import_schedules()`, which returns one row per
@@ -290,6 +298,18 @@ source .venv/bin/activate          # Windows (Git Bash): source .venv/Scripts/ac
 pip install -e ".[dev]"
 ```
 
+`pyproject.toml` splits the dependencies into three levels:
+
+| Install | Adds | Needed for |
+|---------|------|------------|
+| `pip install -e .` | fastapi, uvicorn, pydantic, pandas, numpy, scikit-learn, joblib, fastparquet | Running the API from the committed artifacts. This is all the deployed service installs. |
+| `pip install -e ".[train]"` | nfl_data_py | Running the scripts in `scripts/`, which download schedule data. |
+| `pip install -e ".[dev]"` | Everything in `[train]`, plus pytest, pytest-cov, httpx2 | Running the test suite. |
+
+`.[dev]` includes everything, so use it for development. The install has to be
+editable (`-e`), because the API finds `models/` and `data/` relative to the
+source checkout.
+
 ### Tests
 
 ```bash
@@ -299,9 +319,11 @@ pytest -m "not integration"   # unit tests only, no network access
 
 ### Build features, train, serve
 
-Run these in order. `data/` and `models/` are gitignored, so a fresh clone has
-to generate them before the API can start. Each script downloads the 2015-2024
-schedules with `nfl_data_py`.
+The three files the API reads (`data/processed_games.parquet`,
+`models/logistic_regression.joblib`, `models/training_config.json`) are
+committed, so a fresh clone can start the API straight away with the base
+install. The scripts rebuild those files from scratch. They need `[train]`,
+and each one downloads schedules with `nfl_data_py`. Run them in this order:
 
 ```bash
 python scripts/build_features.py             # writes data/processed_games.parquet
@@ -313,3 +335,15 @@ uvicorn nfl_predictor.api.main:app           # serves on http://127.0.0.1:8000
 
 `scripts/compute_baseline.py` separately prints the game counts and the 2024
 home-team baseline.
+
+## Deployment
+
+The live demo runs on Render's free tier. The service is defined in
+[`render.yaml`](render.yaml) at the repository root. It installs only the base
+dependencies (`pip install -e .`) and starts
+`uvicorn nfl_predictor.api.main:app --host 0.0.0.0 --port $PORT`.
+`.python-version` pins Python 3.11.9. At startup the service reads the three
+committed artifacts (`data/processed_games.parquet`,
+`models/logistic_regression.joblib`, `models/training_config.json`) and never
+fetches data or retrains. It therefore doesn't depend on `nfl_data_py` or its
+data source being reachable when the service is deployed or restarted.
