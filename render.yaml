@@ -1,0 +1,12 @@
+# Render Blueprint: one Python web service serving the committed artifacts.
+services:
+  - type: web
+    name: nfl-predictor
+    runtime: python
+    plan: free
+    # Runtime deps only (no [train]/[dev]). Editable so api/main.py resolves
+    # models/ and data/ from the repo checkout, not from site-packages.
+    buildCommand: pip install -e .
+    # Render injects $PORT; bind 0.0.0.0 so its health check can reach the app.
+    startCommand: uvicorn nfl_predictor.api.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /
