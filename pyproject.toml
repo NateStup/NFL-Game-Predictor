@@ -8,18 +8,28 @@ version = "0.1.0"
 description = "Predicts NFL game outcomes, served as a FastAPI service."
 readme = "README.md"
 requires-python = ">=3.11"
+# Runtime: what the API needs to serve predictions from the committed artifacts.
+# scikit-learn is pinned to the version that pickled models/logistic_regression.joblib
+# (bump it together with a retrain). pandas/numpy stay on the <2 lines that
+# nfl_data_py requires, so serving runs the same versions training and tests use.
 dependencies = [
-    "pandas",
-    "scikit-learn",
     "fastapi",
     "uvicorn",
-    "nfl_data_py",
+    "pydantic",
+    "pandas>=1.5,<2",
+    "numpy<2",
+    "scikit-learn==1.9.1",
     "joblib",
     "fastparquet",
 ]
 
 [project.optional-dependencies]
+# Fetching schedules and running the scripts in scripts/; not needed to serve.
+train = [
+    "nfl_data_py",
+]
 dev = [
+    "nfl-predictor[train]",
     "pytest",
     "pytest-cov",
     "httpx2",
