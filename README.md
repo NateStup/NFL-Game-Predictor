@@ -15,7 +15,7 @@ The API is deployed at <https://nfl-game-predictor.onrender.com/docs>, the
 interactive Swagger UI where you can try `POST /predict` directly. It runs on
 Render's free tier, which shuts the service down after 15 minutes without
 traffic. The first request after an idle period can take up to about a minute
-while it starts back up. That's how the free tier works, not a bug.
+while it starts back up.
 
 ## Data source
 
